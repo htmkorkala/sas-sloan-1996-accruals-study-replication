@@ -1,0 +1,231 @@
+libname mydata 'C:\Users\hkorkala\Desktop';  
+data sloan;  
+set mydata.sloan;  
+run;  
+*proc contents;  
+proc sort data=sloan;  
+  by firm year;  
+data aaa;  
+set sloan;  
+ * 2-digit SIC code;  
+ sic2=int(sic/100);  
+  if TXP=. then TXP=0;  
+ if CHE=. then CHE=0;  
+ if DLC=. then DLC=0;  
+  * delete financial sector;  
+  if sic=>6000 and sic=<6999 then delete;  
+  * scaling variable;  
+  scale=lag(AT); if scale=0 then scale=.;  
+  if firm^=lag(firm) then scale=.;  
+  * Sloan (1996) definition of accruals;  
+  ACC=(dif(ACT)-dif(CHE)-  
+  (dif(LCT)-dif(DLC)-dif(TXP))-DP)/scale;  
+  * accruals based on the statement of CF;  
+  *ACC=(IBC-OANCF)/scale;  
+  EARN=OIADP/scale;  
+  CFO=EARN-ACC;  
+  * t-1 variable;  
+  lagEARN=lag(EARN);  
+  if firm^=lag(firm) then lagEARN=.;  
+  * t-2 variable;  
+  lag2EARN=lag2(EARN);  
+  if firm^=lag2(firm) then lag2EARN=.;  
+  * t-3 variable;  
+  lag3EARN=lag3(EARN);  
+  if firm^=lag3(firm) then lag3EARN=.;  
+  * t-4 variable;  
+  lag4EARN=lag4(EARN);  
+  if firm^=lag4(firm) then lag4EARN=.;  
+  * t-5 variable;  
+  lag5EARN=lag5(EARN);  
+  if firm^=lag5(firm) then lag5EARN=.;  
+  *  keep sic2 year firm conm ACC EARN CFO  
+  lagEARN lag2EARN lag3EARN  
+  lag4EARN lag5EARN ret;  
+  run;  
+  proc sort data=aaa;  
+  by firm descending year;  
+  run;  
+   data aaa;  
+  set aaa;  
+  * t+1 stock returns;  
+  fRET=lag(ret);  
+  if firm^=lag(firm) then fRET=.;  
+ * t+ 1 earnings;  
+  fEARN=lag(EARN);  
+  if firm^=lag(firm) then fEARN=.;  
+  * t+2 variable;  
+  f2EARN=lag(EARN);  
+  if firm^=lag2(firm) then f2EARN=.;  
+  * t+3 variable;  
+  f3EARN=lag3(EARN);  
+  if firm^=lag3(firm) then f3EARN=.;  
+  * t + 4 variable;  
+    f4EARN=lag4(EARN);  
+  if firm^=lag4(firm) then f4EARN=.;  
+ * t + 5 variable;  
+    f5EARN=lag5(EARN);  
+  if firm^=lag5(firm) then f5EARN=.;  
+  run;  
+  proc sort data=aaa;  
+  by firm year;  
+  run;  
+  data bbb;  
+  set aaa;  
+  * delete missing observations;  
+  if EARN=. then delete;  
+  if ACC=. then delete;  
+  if ret=. then delete;  
+if CFO=. then delete; 
+run; 
+*descriptive statistics; 
+proc means n mean std median data=bbb; 
+title ‘descriptive statistics’; 
+var ret EARN ACC CFO; 
+run; 
+ proc corr data=bbb pearson; 
+title ‘Pearson correlations’; 
+var ret EARN ACC CFO; 
+run; 
+data reg1;  
+set bbb;  
+run;  
+proc reg data=reg1; title 'pooled regressions';  
+model fEARN=EARN / white;  
+run;  
+proc sort data=reg1;  
+ by sic2;  
+proc reg data=reg1 noprint adjrsq  
+outest=reg_ind;  
+model fEARN=EARN;  
+ by sic2;  
+run;  
+proc means n mean p25 median p75 t prt  
+data=reg_ind;  
+var Intercept EARN _adjrsq_;  
+run;  
+data reg2;  
+set bbb;  
+run;  
+proc reg data=reg2; title 'pooled regressions table 3';  
+model fEARN=ACC CFO / white;  
+run;  
+proc sort data=reg2;  
+ by sic2;  
+proc reg data=reg2 noprint adjrsq  
+outest=reg_ind;  
+model fEARN=ACC CFO;  
+ by sic2;  
+run;  
+proc means n mean p25 median p75 t prt  
+data=reg_ind;  
+var Intercept ACC CFO _adjrsq_;  
+run;  
+  proc sort data=bbb;  
+  by year;  
+  run;  
+  * form the ranks (10 deciles by each year);  
+  proc rank data=bbb out=ccc groups=10;  
+  var EARN ACC CFO;  
+  by year;  
+  ranks rank_E rank_ACC rank_CFO;  
+  run;  
+  data ddd;  
+  set ccc;  
+ * ranking based on accruals;  
+ rank_var=rank_ACC+1;  
+*descriptive statistics for 10 deciles; 
+proc sort data=ddd; 
+by rank_var; 
+proc means n mean median data=ddd;  
+title 'mean and median values by deciles test';  
+  var ret EARN ACC CFO; 
+  by rank_var; 
+  run; 
+proc sort data=bbb;  
+  by year;  
+  run;  
+  * form the ranks (10 deciles by each year);  
+  proc rank data=bbb out=ccc groups=10;  
+  var EARN ACC CFO;  
+  by year;  
+  ranks rank_E rank_ACC rank_CFO;  
+  run;  
+  data ddd;  
+  set ccc;  
+  * we want to keep only the extreme 1 and 10 deciles;  
+ * ranking based on earnings;  
+* rank_var=rank_E+1;  
+ * ranking based on accruals;  
+ rank_var=rank_ACC+1;  
+ * ranking based on cash flows;  
+* rank_var=rank_CFO+1;  
+ if rank_var>1 and rank_var<10 then delete;  
+  run;  
+proc sort data=ddd;  
+  by rank_var; 
+proc means n mean median data=ddd;  
+title 'mean and median values by extreme deciles';  
+  var lag5EARN lag4EARN lag3EARN  
+  lag2EARN lagEARN EARN  
+  fEARN f2EARN f3EARN f4EARN f5EARN;  
+  by rank_var;  
+  output out=fig  
+  (drop=_type_ _freq_)  
+  median(lag5EARN)=l5  
+  median(lag4EARN)=l4  
+  median(lag3EARN)=l3  
+  median(lag2EARN)=l2  
+  median(lagEARN)=l1  
+  median(EARN)=t0  
+  median(fEARN)=f1  
+  median(f2EARN)=f2  
+  median(f3EARN)=f3 
+median(f4EARN)=f4 
+median(f5EARN)=f5;  
+  run;  
+  proc export data=fig replace  
+/*outfile='C:\Users\hkorkal\Desktop\fig_earn2.xlsx'; */ 
+/* outfile='C:\Users\hkorkala\Desktop\fig_cfo2.xlsx'; */ 
+ outfile='C:\Users\hkorkala\Desktop\fig_acc2.xlsx';  
+  run;  
+data hedge1;  
+set ccc;  
+* ranking based on accruals;  
+rank_var=rank_ACC+1;  
+if rank_var>1 and rank_var<10 then delete;  
+* what if future stock returns is missing?;  
+keep year firm fret rank_var;  
+run;  
+* computation of hedge portfolio returns;  
+proc sort data=hedge1;  
+ by year rank_var;  
+proc means mean data=hedge1 noprint;  
+ var fret;  
+ by year rank_var;  
+ output out=hedge2 (drop=_type_ _freq_)  
+ mean(fret)=mean_ret;  
+run;  
+data high low;  
+set hedge2;  
+if rank_var=1 then output low;  
+if rank_var=10 then output high;  
+run;  
+data high;  
+set high;  
+ high_fret=mean_ret;  
+ drop rank_var mean_ret;  
+data low;  
+set low;  
+ low_fret=mean_ret;  
+ drop rank_var mean_ret;  
+data hedge;  
+merge high low;  
+by year;  
+ hedge_ret=low_fret-high_fret;  
+ if year=2012 then delete;  
+ drop low_fret high_fret;  
+run;  
+ proc export data=hedge replace  
+ outfile='C:\Users\hkorkala\Desktop\fig3.xlsx';  
+ run; 
