@@ -1,3 +1,4 @@
+*reading data;
 libname mydata 'C:\Users\hkorkala\Desktop';  
 data sloan;  
 set mydata.sloan;  
